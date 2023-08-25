@@ -1,0 +1,233 @@
+#.import
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+import csv
+import itertools
+import random
+import matplotlib.pylab as plt
+import sys
+import math
+import keras
+import matplotlib.pyplot as plt
+from collections import Counter
+from glob import iglob
+from PIL import Image , ImageDraw
+from glob import glob
+from PIL import Image as pil_image
+from matplotlib.pyplot import imshow, imsave
+from IPython.display import Image as Image
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from keras.preprocessing.image import ImageDataGenerator
+from keras.preprocessing import image
+from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.models import Sequential, Model
+from keras.layers import Conv2D, MaxPooling2D
+from keras.layers import Activation, Dropout, Flatten, Dense
+from keras import optimizers
+from tensorflow.keras.applications import VGG16
+from glob import glob
+from PIL import Image as pil_image
+from matplotlib.pyplot import imshow, imsave
+from IPython.display import Image as Image
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from keras.utils.np_utils import to_categorical
+from keras.models import Model, Sequential
+from keras.layers import Dense, Dropout, Flatten, Input, AveragePooling2D, merge, Activation
+from keras.layers import Conv2D, MaxPooling2D, BatchNormalization
+from keras.layers import Concatenate, GlobalAveragePooling2D
+from tensorflow.keras.optimizers import Adam,SGD
+#from keras.optimizers import Adam, SGD
+from keras import regularizers, initializers
+from keras.layers.advanced_activations import LeakyReLU, ReLU, Softmax
+from keras.layers import Reshape, Activation, Conv2D, Input, MaxPooling2D, BatchNormalization, Flatten, Dense, Lambda
+from keras.layers.merge import concatenate
+from keras.preprocessing.image import ImageDataGenerator
+from keras.callbacks import *
+from tensorflow.keras.utils import plot_model
+from keras.models import load_model
+
+
+#.the code
+main_df = pd.read_csv('meta.csv')
+main_df.head()
+
+#We have some missing values in the "age" feature. So, lets fill it either use mean or median of the "age" feature
+print(main_df['age'].mean())
+print(main_df['age'].median())
+main_df['age'].fillna(main_df['age'].mean(),inplace=True)
+#Most of the affected people are their ages 
+sns.kdeplot(main_df['age'],shade=True)
+#Lets create a dictionary to feed in label values in our dataframe
+lesion_type_dict = {'mel': 'Melanoma','bcc': 'Basal cell carcinoma','ak' : 'Actinic keratosis','bkl': 'Benign keratosis-like lesions ','df': 'Dermatofibroma','vasc': 'Vascular lesions','scc': 'Squamous cell carcinoma'
+}
+lesion_classes_dict ={
+0:'mel',
+1:'bcc',
+2:'ak',
+3:'bkl',
+4:'df',
+6:'vasc',
+6:'scc'
+}
+main_df['cell_type'] = main_df['dx'].map(lesion_type_dict)
+main_df['cell_type_idx'] = pd.Categorical(main_df['cell_type']).codes
+sns.catplot(x="sex", y="cell_type_idx",
+                    hue="sex",
+                    data=main_df,
+                    kind="violin")
+image_path = {os.path.splitext(os.path.basename(x))[0]: x for x in glob(os.path.join('', '*', '*.jpg'))}
+main_df['path'] = main_df['image_id'].map(image_path.get)
+main_df.head()
+image_example = np.asarray(pil_image.open(main_df['path'][0]))
+image_example.shape
+plt.imshow(image_example)
+main_df['image'] = main_df['path'].map(lambda x: np.asarray(pil_image.open(x).resize((120,90))))
+main_df.head()
+plt.imshow(main_df['image'][0])
+main_df['image'][0].shape
+fig,axes = plt.subplots(7,5,figsize=(20,21))
+for nth_axis,(cell_type_name,cell_type_row) in zip(axes,main_df.sort_values(['cell_type']).groupby('cell_type')):
+    nth_axis[0].set_title(cell_type_name)
+    for column_axis,(_,column_row) in zip(nth_axis,cell_type_row.sample(5).iterrows()):
+        column_axis.imshow(column_row['image'])  
+        column_axis.axis('off')
+        #Let's split the dataset into Trainig and Validation set.
+        features = main_df.drop(['cell_type_idx'],axis=1)
+
+target = main_df['cell_type_idx']
+
+X_TRAIN, X_TEST, Y_TRAIN, Y_TEST = train_test_split(features,target,test_size=0.01)
+#Creating Image Training and Test set
+x_train = np.asarray(X_TRAIN['image'].tolist())
+x_test = np.asarray(X_TEST['image'].tolist())
+
+print(x_train.shape)
+print(x_test.shape)
+
+train_mean = x_train.mean()
+train_std = x_train.std()
+test_mean = x_test.mean()
+test_std = x_test.std()
+
+print(train_mean)
+print(train_std)
+print(test_mean)
+print(test_std)
+
+#calculate mean and Standard deviation of the image array's and then Standardize the image pixel values using the following formula:
+_train = (x_train-train_mean) / train_std
+x_test = (x_test-test_mean) / test_std
+
+print(Y_TRAIN.shape)
+print(Y_TEST.shape)
+
+y_train = to_categorical(Y_TRAIN,num_classes=7)
+y_test = to_categorical(Y_TEST,num_classes=7)
+print(y_train.shape)
+X_train,X_val, Y_train,Y_val = train_test_split(x_train,y_train,test_size=0.15)
+X_train  = X_train.reshape(X_train.shape[0],90,120,3)
+x_test  = x_test.reshape(x_test.shape[0],90,120,3)
+X_val  = X_val.reshape(X_val.shape[0],90,120,3)
+
+print(X_train.shape)
+print(x_test.shape)
+print(X_val.shape)
+input_shape = (90, 120, 3)
+num_classes = 7
+
+model = Sequential()
+
+model.add(Conv2D(32,kernel_size=(3, 3),activation='relu',name="conv1", input_shape=input_shape)) #88,118
+model.add(BatchNormalization(name="Norm1"))
+model.add(Conv2D(64,kernel_size=(3, 3), activation='relu',name="Conv2")) #86,116
+model.add(BatchNormalization(name="Norm2"))
+model.add(Conv2D(64,kernel_size=(3, 3), activation='relu',name="Conv3")) #84,114
+model.add(BatchNormalization(name="Norm3"))
+model.add(MaxPooling2D(pool_size = (2, 2))) # 42,57
+model.add(Dropout(0.20))
+
+model.add(Conv2D(64, (3, 3), activation='relu',name="conv4")) #40,55
+model.add(BatchNormalization(name="Norm4"))
+model.add(Conv2D(128, (3, 3), activation='relu',name="conv5")) #38,53
+model.add(BatchNormalization(name="Norm5"))
+model.add(Conv2D(128, (3, 3), activation='relu',name="conv6")) #36,51
+model.add(BatchNormalization(name="Norm6"))
+model.add(MaxPooling2D(pool_size=(2, 2))) #18,25
+model.add(Dropout(0.20))
+
+model.add(Conv2D(128, (3, 3), activation='relu',name="conv7")) #16,23
+model.add(BatchNormalization(name="Norm7"))
+model.add(Conv2D(256, (3, 3), activation='relu',name="conv8")) #14,21
+model.add(BatchNormalization(name="Norm8"))
+model.add(Conv2D(256, (3, 3), activation='relu',name="conv9")) #12,19
+model.add(BatchNormalization(name="Norm9"))
+model.add(MaxPooling2D(pool_size=(2, 2))) #6,9
+model.add(Dropout(0.20))
+
+model.add(Conv2D(7,(1,1),name="conv10",activation="relu")) #6,9
+model.add(BatchNormalization(name="Norm10"))
+model.add(Conv2D(7,kernel_size=(6,9),name="conv11"))
+model.add(Flatten())
+model.add(Activation('softmax'))
+# Compile the model
+model.compile(optimizer = 'adam' , loss = "categorical_crossentropy", metrics=["accuracy"])
+# Set a learning rate annealer
+learning_rate_reduction = ReduceLROnPlateau(monitor='val_loss', 
+                                            patience=4, 
+                                            verbose=1, 
+                                            factor=0.0001, 
+                                            min_lr=0.000001)
+
+plot_model(model, to_file='ISIC_0000014.jpg', show_shapes=True, show_layer_names=True)
+Image(retina=True, filename='ISIC_0000014.jpg')
+# With data augmentation to prevent overfitting 
+
+datagen = ImageDataGenerator(
+        rotation_range=10,  # randomly rotate images in the range (degrees, 0 to 180)
+        zoom_range = 0.1 # Randomly zoom image 
+)
+
+
+# Fit the model
+epochs = 10
+batch_size = 128
+model.fit_generator(datagen.flow(X_train,Y_train, batch_size=batch_size),
+                              epochs = epochs, validation_data = (X_val,Y_val),
+                              verbose = 1, steps_per_epoch=X_train.shape[0] // batch_size
+                              , callbacks=[learning_rate_reduction])
+
+def plot_(history):
+    acc = history.history['acc']
+    val_acc = history.history['val_acc']
+
+    loss = history.history['loss']
+    val_loss = history.history['val_loss']
+
+    f, [ax1, ax2] = plt.subplots(1,2, figsize=(15, 5))
+    ax1.plot(range(len(acc)), acc, label="acc")
+    ax1.plot(range(len(acc)), val_acc, label="val_acc")
+    ax1.set_title("Training Accuracy vs Validation Accuracy")
+    ax1.legend()
+
+    ax2.plot(range(len(loss)), loss, label="loss")
+    ax2.plot(range(len(loss)), val_loss, label="val_loss")
+    ax2.set_title("Training Loss vs Validation Loss")
+    ax2.legend()
+    
+    
+plot_(model.history)
+print("MAXIMUM ACCURACY OF SIMPLE SEQUENTIAL NETWORK is : ", round(max(model.history.history['val_acc'])*100,4))
+## Let's random image to test the model.
+import urllib
+
+url="dataset\ISIC_0000011.jpg"
+
+urllib.request.urlretrieve(url,'test.jpg')
+test_image = np.asarray(pil_image.open('test.jpg'))
+print('Original Shape of image is : ',test_image.shape)
+plt.imshow(test_image)
